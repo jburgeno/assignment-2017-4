@@ -7,9 +7,11 @@ data {
   int p;
   // design matrix X
   matrix [n, p] x;
+  // regularization parameter
+  real<lower = 0.> lambda;
 }
 transformed data {
-  
+  real<lower = 0.> tau = 1 / lambda;
 }
 parameters {
   // regression coefficient vector
@@ -26,7 +28,11 @@ transformed parameters {
 }
 model {
   // priors
-  // sigma ~ cauchy(0., 5);
+  sigma ~ cauchy(0., 5);
+  // alpha ~ double_exponential(0, tau * sigma);
+  alpha ~ double_exponential(0, tau);
+  // beta ~ double_exponential(0, tau * sigma);
+  beta ~ double_exponential(0, tau);
   // likelihood
   y ~ normal(mu, sigma);
 }

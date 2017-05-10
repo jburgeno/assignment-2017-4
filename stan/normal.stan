@@ -1,45 +1,46 @@
 data {
   // number of observations
-  int N;
+  int n;
   // response vector
-  vector[N] y;
+  vector[n] y;
   // number of columns in the design matrix X
-  int P;
+  int p;
   // design matrix X
-  matrix [N, P] X;
+  matrix [n, p] x;
+  // regularization parameter
+  real<lower = 0.> lambda;
 }
 transformed data {
-  
+  real<lower = 0.> tau = 1 / (2 * lambda);
 }
 parameters {
   // regression coefficient vector
   real alpha;
-  vector[P] beta;
+  vector[p] beta;
   // scale of the regression errors
   real<lower = 0.> sigma;
 }
 transformed parameters {
   // mu is the observation fitted/predicted value
   // also called yhat
-  vector[N] mu;
-  mu = X * beta;
+  vector[n] mu;
+  mu = alpha + x * beta;
 }
 model {
   // priors
-  alpha ~ normal(0., a_pr_scale);
-  beta ~ normal(0., tau);
-  sigma ~ cauchy(0., sigma_pr_scale);
+  sigma ~ cauchy(0., 5);
+  alpha ~ normal(0, tau);
+  beta ~ normal(0, tau);
   // likelihood
   y ~ normal(mu, sigma);
 }
-generated quantities {
-  // simulate data from the posterior
-  vector[N] y_rep;
-  // log-likelihood posterior
-  vector[N] log_lik;
-  // mean log likelihood
-  for (n in 1:N) {
-    y_rep[n] = normal_rng(mu[n], sigma);
-    log_lik[n] = normal_lpdf(y[n] | mu[n], sigma);
-  }
-}
+// generated quantities {
+//   // simulate data from the posterior
+//   vector[n] y_rep;
+//   // log-likelihood posterior
+//   vector[n] log_lik;
+//   for (i in 1:n) {
+//     y_rep[i] = normal_rng(mu[i], sigma);
+//     log_lik[i] = normal_lpdf(y[i] | mu[i], sigma);
+//   }
+// }

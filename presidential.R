@@ -6,23 +6,81 @@
 library(rstan)
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
+library(glmnet)
 # library(rstanarm)
-library(rubbish)
+# library(rubbish)
 
-# Data
+## Data
+# Read
 dat <- read.csv('data/presdata.csv')
 head(dat)
+# Clean
 dat <- dat[complete.cases(dat),-1]
 head(dat)
+
+# For quick model fits/easy interpretation, we'll select a subset of variables
 x <- as.matrix(cbind(dat$septpoll, dat$gdpqtr2half, dat$q2gdp, dat$julypop, dat$fatalities, dat$term))
+# Add in a noise variable for illustrative purposes
+x <- cbind(x, rnorm(dim(x)[1]))
+
+y <- dat$dv
 n <- dim(dat)[1]
-# p <- dim(dat)[2] - 2
 p <- dim(x)[2]
 
-improper_mod <- stan_model('stan/improper.stan')
-improper_predict <- numeric(n-1)
 
-improper_fit <- sampling(improper_mod, data = list(n = n, p = p, y = dat$dv, x = x))
+# Standardize all variables so we can put the same prior on all regression coefficients
+y <- (y - mean(y))/sd(y)
+for (i in 1:p) {
+  x[,i] <- (x[,i] - mean(x[,i]))/sd(x[,i])
+}
+
+## Stan Models
+# Compilation
+MLE_mod <- stan_model('stan/improper.stan')
+L2_mod <- stan_model('stan/normal.stan')
+L1_mod <- stan_model('stan/laplace.stan')
+
+# Fits
+MLE_fit <- sampling(MLE_mod, data = list(n = n, p = p, y = y, x = x))
+
+lambda <- 1
+L2_fit <- sampling(L2_mod, data = list(n = n, p = p, y = y, x = x, lambda = lambda))
+L1_fit <- sampling(L1_mod, data = list(n = n, p = p, y = y, x = x, lambda = lambda))
+
+# Examine
+summary(MLE_fit, pars = c("alpha", "beta"))$summary
+summary(L2_fit, pars = c("alpha", "beta"))$summary
+summary(L1_fit, pars = c("alpha", "beta"))$summary
+
+lambda_seq <- seq(0.1, 10.1, by = 2)
+L2_estimates <- matrix(0, nrow = length(lambda_seq), ncol = p + 1)
+L1_estimates <- matrix(0, nrow = length(lambda_seq), ncol = p + 1)
+for (i in 1:length(lambda_seq)) {
+  L2_estimates[i,] <- summary(sampling(L2_mod, data = list(n = n, p = p, y = y, x = x, lambda = lambda_seq[i]),
+                                       refresh = -1), pars = c("alpha", "beta"))$summary[,1]
+  L1_estimates[i,] <- summary(sampling(L1_mod, data = list(n = n, p = p, y = y, x = x, lambda = lambda_seq[i]),
+                                       refresh = -1), pars = c("alpha", "beta"))$summary[,1]
+}
+matplot(lambda_seq, L2_estimates, type = 'l', main = "L2")
+matplot(lambda_seq, L1_estimates, type = 'l', main = "L1")
+
+# MAPs
+L2_map <- optimizing(L2_mod, data = list(n = n, p = p, y = y, x = x, lambda = lambda))
+L1_map <- optimizing(L1_mod, data = list(n = n, p = p, y = y, x = x, lambda = lambda))
+
+# Frequentist
+MLE_net <- lm(y ~ x)
+MLE_net$coefficients
+summary(MLE_fit, pars = c("alpha", "beta"))$summary[,1]
+
+L2_net <- glmnet(x, y, alpha = 0, lambda = 1)
+L2_net$beta
+summary(L2_fit, pars = c("alpha", "beta"))$summary[,1]
+
+L1_net <- glmnet(x,y)
+plot(L1_net)
+print(L1_net)
+
 prediction <- apply(extract(improper_fit, "mu")$mu, 2, mean)
 
 
