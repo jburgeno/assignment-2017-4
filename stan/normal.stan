@@ -11,7 +11,7 @@ data {
   real<lower = 0.> lambda;
 }
 transformed data {
-  real<lower = 0.> tau = sqrt(1 / (2 * lambda));
+  real<lower = 0.> tau = 1 / (2 * lambda);
 }
 parameters {
   // regression coefficient vector
