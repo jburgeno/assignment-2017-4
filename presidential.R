@@ -67,19 +67,24 @@ matplot(lambda_seq, L1_estimates, type = 'l', main = "L1")
 # MAPs
 L2_map <- optimizing(L2_mod, data = list(n = n, p = p, y = y, x = x, lambda = lambda))
 L1_map <- optimizing(L1_mod, data = list(n = n, p = p, y = y, x = x, lambda = lambda))
+MLE_map <- optimizing(MLE_mod, data = list(n = n, p = p, y = y, x = x))
 
 # Frequentist
 MLE_net <- lm(y ~ x)
 MLE_net$coefficients
-summary(MLE_fit, pars = c("alpha", "beta"))$summary[,1]
+MLE_map$par[1:(p + 1)]
+# summary(MLE_fit, pars = c("alpha", "beta"))$summary[,1]
 
 L2_net <- glmnet(x, y, alpha = 0, lambda = 1)
 L2_net$beta
-summary(L2_fit, pars = c("alpha", "beta"))$summary[,1]
+L2_map$par[1:(p + 1)]
+# summary(L2_fit, pars = c("alpha", "beta"))$summary[,1]
 
-L1_net <- glmnet(x,y)
-plot(L1_net)
-print(L1_net)
+L1_net <- glmnet(x,y, alpha = 1, lambda = 1)
+L1_net$beta
+L1_map$par[1:(p + 1)]
+plot(glmnet(x, y))
+print(glmnet(x, y))
 
 prediction <- apply(extract(improper_fit, "mu")$mu, 2, mean)
 
