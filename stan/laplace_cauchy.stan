@@ -7,11 +7,9 @@ data {
   int p;
   // design matrix X
   matrix [n, p] x;
-  // regularization parameter
-  real<lower = 0.> lambda;
 }
 transformed data {
-  real<lower = 0.> tau = sqrt(1 / (2 * lambda));
+  
 }
 parameters {
   // regression coefficient vector
@@ -19,6 +17,8 @@ parameters {
   vector[p] beta;
   // scale of the regression errors
   real<lower = 0.> sigma;
+  // prior on penalty coefficient
+  real<lower = 0.> tau;
 }
 transformed parameters {
   // mu is the observation fitted/predicted value
@@ -29,8 +29,11 @@ transformed parameters {
 model {
   // priors
   sigma ~ cauchy(0., 5);
-  alpha ~ normal(0, tau);
-  beta ~ normal(0, tau);
+  // alpha ~ double_exponential(0, tau * sigma);
+  alpha ~ double_exponential(0, tau);
+  // beta ~ double_exponential(0, tau * sigma);
+  beta ~ double_exponential(0, tau);
+  tau ~ cauchy(0., 1);
   // likelihood
   y ~ normal(mu, sigma);
 }

@@ -2,7 +2,7 @@
 # 5/9/2017
 # Regularization Example
 
-# Packages
+## Packages
 library(rstan)
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
@@ -21,7 +21,7 @@ head(dat)
 # For quick model fits/easy interpretation, we'll select a subset of variables
 x <- as.matrix(cbind(dat$septpoll, dat$gdpqtr2half, dat$q2gdp, dat$julypop, dat$fatalities, dat$term))
 # Add in a noise variable for illustrative purposes
-x <- cbind(x, rnorm(dim(x)[1]))
+# x <- cbind(x, rnorm(dim(x)[1]))
 
 y <- dat$dv
 n <- dim(dat)[1]
@@ -79,17 +79,41 @@ L2_net <- glmnet(x, y, alpha = 0, lambda = 1)
 L2_net$beta
 L2_map$par[1:(p + 1)]
 # summary(L2_fit, pars = c("alpha", "beta"))$summary[,1]
+plot(glmnet(x, y, alpha = 0))
+abline(0,0)
+print(glmnet(x, y, alpha = 0))
 
-L1_net <- glmnet(x,y, alpha = 1, lambda = 1)
+L1_net <- glmnet(x,y)
 L1_net$beta
 L1_map$par[1:(p + 1)]
-plot(glmnet(x, y))
+plot(glmnet(x, y, alpha = 1))
 print(glmnet(x, y))
 
-prediction <- apply(extract(improper_fit, "mu")$mu, 2, mean)
+## Prediction
+# More advanced models
+L1_hyper_mod <- stan_model('stan/laplace_cauchy.stan')
+horse_mod <- stan_model('stan/horseshoe.stan')
 
-
-
-for (i in 2:n) {
-  improper_fit <- sampling(improper_mod, data = list(n = i - 1, p = p, y = dat$dv[1:(i-1)], x = dat[1:(i-1),3:(p+2)]))
+results <- data.frame(matrix(0, nrow = 14, ncol = 5))
+colnames(results) <- c('improper', 'normal', 'laplace', 'laplace_cauchy', 'horseshoe')
+# Sequential predictions
+for (i in 9:n) {
+  Y <- y[1:(i-1)]
+  X <- x[1:(i-1),]
+  improper_fit <- sampling(MLE_mod, data = list(n = i - 1, p = p, y = Y, x = X), refresh = -1)
+  # improper_fit <- sampling(MLE_mod, data = list(n = i - 1, p = p, y = Y, x = X))
+  improper_pred <- mean(extract(improper_fit, 'alpha')$alpha) + x[i,]%*%apply(extract(improper_fit, 'beta')$beta, 2, mean)
+  results$improper[i-1] <- (y[i] - improper_pred)^2
+  normal_fit <- sampling(L2_mod, data = list(n = i - 1, p = p, y = Y, x = X, lambda = 0.3), refresh = -1)
+  normal_pred <- mean(extract(normal_fit, 'alpha')$alpha) + x[i,]%*%apply(extract(normal_fit, 'beta')$beta, 2, mean)
+  results$normal[i-1] <- (y[i] - normal_pred)^2
+  laplace_fit <- sampling(L1_mod, data = list(n = i - 1, p = p, y = Y, x = X, lambda = 0.3), refresh = -1)
+  laplace_pred <- mean(extract(laplace_fit, 'alpha')$alpha) + x[i,]%*%apply(extract(laplace_fit, 'beta')$beta, 2, mean)
+  results$laplace[i-1] <- (y[i] - laplace_pred)^2
+  laplace_cauchy_fit <- sampling(L1_hyper_mod, data = list(n = i - 1, p = p, y = Y, x = X), refresh = -1)
+  laplace_cauchy_pred <- mean(extract(laplace_cauchy_fit, 'alpha')$alpha) + x[i,]%*%apply(extract(laplace_cauchy_fit, 'beta')$beta, 2, mean)
+  results$laplace_cauchy[i-1] <- (y[i] - laplace_cauchy_pred)^2
+  horse_fit <- sampling(horse_mod, data = list(n = i - 1, p = p, y = Y, x = X, df_local = 3, df_global = 3), refresh = -1)
+  horse_pred <- mean(extract(horse_fit, 'alpha')$alpha) + x[i,]%*%apply(extract(horse_fit, 'beta')$beta, 2, mean)
+  results$horseshoe[i-1] <- (y[i] - horse_pred)^2
 }
